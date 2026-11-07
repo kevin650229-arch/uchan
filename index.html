@@ -1262,6 +1262,7 @@ var ME = null;
     q('#logout').addEventListener('click', webLogout);
     if (!m.admin) { document.body.classList.add('role-user'); showChat(); }
     else if (S.view === 'chat' && C.init && (p.n || p.photo)) lcClear();   // 對話已經先畫好了：重畫一次帶上大頭照
+    if (m.owner) loadAccts();
     else renderSide();
     adjustHeight();
   }).withFailureHandler(function (e) { w.innerHTML = '<span class="em">⚠️ ' + esc(e.message || e) + '</span>'; }).webWhoAmI('');
@@ -1270,6 +1271,11 @@ function webLogout() {
   try { sessionStorage.removeItem('uchan_idt'); localStorage.removeItem('uchan_st'); } catch (e) {}
   try { google.accounts.id.disableAutoSelect(); } catch (e) {}
   location.reload();
+}
+/* 主管理員：左側列出各帳號，點一下唯讀查看他的對話 */
+var ACCTS = [];
+function loadAccts() {
+  gsRun().withSuccessHandler(function (d) { if (d && d.ok) { ACCTS = (d.users || []).filter(function (u) { return !u.fixed; }); renderSide(); } }).webUsersList('');
 }
 /* 管理員：左側多一個「⚙️ 使用者設定」 */
 var _renderSide = renderSide;
@@ -1282,9 +1288,25 @@ renderSide = function () {
     it.innerHTML = '<span class="nm">⚙️ 使用者設定</span>';
     var cat = box.querySelector('[data-v="catalog"]');
     if (cat && cat.nextSibling) box.insertBefore(it, cat.nextSibling); else box.appendChild(it);
+    if (ME.owner && ACCTS.length) {                       // 各帳號的對話紀錄
+      var h = document.createElement('div'); h.className = 'cat-head'; h.textContent = '帳號對話紀錄';
+      var anchor = it.nextSibling;
+      box.insertBefore(h, anchor);
+      ACCTS.forEach(function (u) {
+        var a = document.createElement('div'); a.className = 'cat-item' + (C.view === u.e && S.view === 'chat' ? ' act' : '');
+        a.setAttribute('data-v', 'acct'); a.setAttribute('data-e', u.e); a.setAttribute('data-n', u.n || '');
+        a.innerHTML = '<span class="nm">💬 ' + esc(u.n || u.e) + (u.on ? '' : '（已關閉）') + '</span>';
+        a.title = u.e;
+        box.insertBefore(a, anchor);
+      });
+    }
   });
 };
 document.addEventListener('click', function (e) {
+  var ch = e.target.closest && e.target.closest('[data-v="chat"]');
+  if (ch && C.view) { C.view = ''; C.who = null; document.body.classList.remove('viewing'); setTimeout(function () { lcClear(); renderSide(); }, 0); }   // 查看別人時點「跟 U醬 對話」：回到自己的對話
+  var ac = e.target.closest && e.target.closest('[data-v="acct"]');
+  if (ac) { e.stopPropagation(); e.preventDefault(); try { closeDrawer(); } catch (x) {} viewChatOf(ac.getAttribute('data-e'), ac.getAttribute('data-n')); return; }
   var it = e.target.closest && e.target.closest('[data-v="users"]');
   if (!it) return;
   e.stopPropagation(); e.preventDefault();
@@ -1318,6 +1340,7 @@ function wuCall(fn, args, okText) {
   var r = gsRun().withSuccessHandler(function (d) {
     if (!d || !d.ok) { wuMsg('⚠️ ' + ((d && d.error) || '失敗'), true); return; }
     wuRender(d); if (okText) wuMsg(okText);
+    if (ME && ME.owner) { ACCTS = (d.users || []).filter(function (u) { return !u.fixed; }); renderSide(); }
   }).withFailureHandler(function (e) { wuMsg('⚠️ ' + (e.message || e), true); });
   r[fn].apply(null, [''].concat(args));
 }
@@ -1382,7 +1405,7 @@ lcMe = function (text, t, noSave, d) {
   var bar = document.createElement('div'); bar.className = 'lc-viewbar';
   bar.innerHTML = '<span id="lc-viewwho"></span><button type="button" id="lc-viewexit">返回我的對話</button>';
   var head = q('#chatv .lc-head'); head.parentNode.insertBefore(bar, head.nextSibling);
-  q('#lc-viewexit').addEventListener('click', function () { C.view = ''; C.who = null; document.body.classList.remove('viewing'); lcClear(); });
+  q('#lc-viewexit').addEventListener('click', function () { C.view = ''; C.who = null; setTimeout(renderSide, 0); document.body.classList.remove('viewing'); lcClear(); });
 })();
 function viewChatOf(email, name) {
   closeModal();
@@ -1391,6 +1414,7 @@ function viewChatOf(email, name) {
   document.body.classList.add('viewing');
   if (S.view !== 'chat' || !C.init) showChat();
   if (C.init) lcClear();
+  renderSide();
 }
 </script>
 </body>
