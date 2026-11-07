@@ -1331,7 +1331,7 @@ function openUsers() {
     '・<b>管理員</b>：另外可看指令紀錄、指令清單、管理使用者。<br>' +
     '・<b>對話</b>：除了主管理員（和 LINE 同一份對話），每個人都有自己獨立的對話內容，只看得到自己的；只限帳號擁有者的功能（公文、員工查詢等）不能用。<br>' +
     '・職編：<b>必填</b>，必須是公司現有人員；之後這個人不在公司人員資料（例如離職），帳號會自動不能使用。指令紀錄裡會用姓名顯示。<br>' +
-    '・LINE 帳號：從跟 U醬 說過話的 LINE 帳號裡挑選（一個 LINE 帳號只能綁一個 Gmail）。綁定後這個人在 LINE 上也能用 U醬（權限同「使用者」），網頁和 LINE 是同一份對話，公文等功能也會用他的職編。<br>' +
+    '・LINE 帳號：從跟 U醬 說過話的 LINE 帳號裡挑選（一個 LINE 帳號只能綁一個 Gmail）。綁定後還要按「○ LINE 未開通」<b>在後台開通</b>，這個人才能在 LINE 使用 U醬（權限同「使用者」）；開通後網頁和 LINE 是同一份對話，公文等功能也會用他的職編。只加 U醬 好友、或只綁定沒開通的，LINE 都不能用。<br>' +
     '・💬 對話紀錄（只有主管理員）：以唯讀方式查看這個人跟 U醬 的對話。<br>' +
     '・關閉：暫時不能登入使用，名單保留；刪除：從名單移除。主管理員不能關閉或刪除。</div>';
   q('#modal-overlay').className = 'on'; S.modalOpen = true;
@@ -1379,6 +1379,7 @@ function wuRender(d) {
     var idIn = '<input class="wu-id" data-e="' + esc(u.e) + '" value="' + esc(u.id || '') + '" placeholder="職編" title="對應的公司職編，輸入後按 Enter">';
     var lnSel = '<select class="wu-ln" data-e="' + esc(u.e) + '" title="綁定的 LINE 帳號">' + lineOpts(u.line || '', u.e) + '</select>';
     idIn += lnSel;
+    if (u.line && !u.fixed) idIn += '<button type="button" class="wu-tg wu-lo ' + (u.lineOn ? 'on' : 'off') + '" data-e="' + esc(u.e) + '" data-on="' + (u.lineOn ? 1 : 0) + '" title="後台開通後，這個 LINE 帳號才能使用 U醬">' + (u.lineOn ? '💚 LINE 已開通' : '○ LINE 未開通') + '</button>';
     var chat = (!u.fixed && ME && ME.owner) ? '<button type="button" class="wu-chat" data-e="' + esc(u.e) + '" data-n="' + esc(u.n || '') + '">💬 對話紀錄</button>' : '';
     var ctl = u.fixed ? idIn + '<span class="wu-tag">主管理員</span>' : idIn + chat +
       '<select data-e="' + esc(u.e) + '" class="wu-r"><option value="user"' + (u.r !== 'admin' ? ' selected' : '') + '>使用者</option><option value="admin"' + (u.r === 'admin' ? ' selected' : '') + '>管理員</option></select>' +
@@ -1386,7 +1387,7 @@ function wuRender(d) {
       '<button type="button" class="wu-del" data-e="' + esc(u.e) + '" title="刪除">🗑</button>';
     return '<div class="wu-row' + (u.on ? '' : ' off') + '"><span class="em">' + esc(u.e) + (me ? '（你）' : '') +
       ((u.n || u.id) ? '<span class="sub">👤 ' + esc(u.n ? u.n + '（' + u.id + '）' + (u.d ? '・' + u.d : '') : u.id) + '</span>' : '') +
-      (u.line ? '<span class="sub">💚 LINE：' + esc(lineName(u.line)) + '</span>' : '') +
+      (u.line ? '<span class="sub">' + (u.fixed || u.lineOn ? '💚' : '⚪') + ' LINE：' + esc(lineName(u.line)) + (u.fixed ? '' : u.lineOn ? '（已開通）' : '（已綁定、尚未開通，LINE 還不能使用）') + '</span>' : '') +
       (!u.fixed && !u.id ? '<span class="sub" style="color:#c0392b">⚠️ 尚未設定職編，目前不能使用</span>' : '') +
       (!u.fixed && u.id && u.valid === false ? '<span class="sub" style="color:#c0392b">⚠️ 不在公司人員資料（可能已離職），目前不能使用</span>' : '') +
       (u.t ? '<span class="sub">新增於 ' + esc(u.t) + '</span>' : '') + '</span>' + ctl + '</div>';
@@ -1395,9 +1396,12 @@ function wuRender(d) {
     wuCall('webUserSave', [{ e: s.getAttribute('data-e'), line: s.value }], s.value ? '✅ 已綁定 LINE 帳號' : '✅ 已解除 LINE 綁定'); }); });
   box.querySelectorAll('.wu-r').forEach(function (s) { s.addEventListener('change', function () {
     wuCall('webUserSave', [{ e: s.getAttribute('data-e'), r: s.value }], '✅ 已更新角色'); }); });
-  box.querySelectorAll('.wu-tg').forEach(function (b) { b.addEventListener('click', function () {
+  box.querySelectorAll('.wu-tg:not(.wu-lo)').forEach(function (b) { b.addEventListener('click', function () {
     var on = b.getAttribute('data-on') !== '1';
     wuCall('webUserSave', [{ e: b.getAttribute('data-e'), on: on }], on ? '✅ 已啟用' : '✅ 已關閉'); }); });
+  box.querySelectorAll('.wu-lo').forEach(function (b) { b.addEventListener('click', function () {
+    var on = b.getAttribute('data-on') !== '1';
+    wuCall('webUserSave', [{ e: b.getAttribute('data-e'), lineOn: on }], on ? '✅ 已開通 LINE：這個人現在可以在 LINE 使用 U醬' : '✅ 已停用 LINE'); }); });
   box.querySelectorAll('input.wu-id').forEach(function (inp) {
     function save() { if (inp.value.trim() === (inp.defaultValue || '').trim()) return; wuCall('webUserSave', [{ e: inp.getAttribute('data-e'), id: inp.value.trim() }], '✅ 已更新職編'); }
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) save(); });
