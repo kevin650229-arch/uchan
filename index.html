@@ -989,6 +989,11 @@ function doAction(a) {
   if (a.type === 'postback') lcSend({ data: a.data }, a.displayText || '');
   else if (a.type === 'message') lcSend({ text: a.text }, a.text);
   else if (a.type === 'uri') window.open(a.uri, '_blank');
+  else if (a.type === 'camera' || a.type === 'cameraRoll') {   // LINE 的開相機／相簿按鈕：網頁改開選檔視窗（手機上拍照會直接開相機）
+    var fi = q('#lc-fin'); fi.accept = 'image/*';
+    if (a.type === 'camera') fi.setAttribute('capture', 'environment'); else fi.removeAttribute('capture');
+    fi.click(); setTimeout(function () { fi.accept = ''; fi.removeAttribute('capture'); }, 1000);
+  }
   else if (a.type === 'richmenuswitch') { var k = String(a.richMenuAliasId || '').replace(/^portal-/, ''); if (k) { C.tab = k; renderRich(); q('.lc-rich').classList.add('on'); } }
   else lcSys('（網頁不支援這種按鈕：' + a.type + '）');
 }
