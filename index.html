@@ -411,7 +411,10 @@ function rpcCall(fn, args, ok, fail) {
       if (d.ok) { if (ok) ok(d.result); return; }
       if (d.auth) {
         IDT = ''; try { sessionStorage.removeItem('uchan_idt'); } catch (e) {}
-        if (/沒有權限/.test(d.error)) { gateShow(d.error); return; }
+        if (d.denied) {                                  // 這個帳號不在名單或已關閉：不要自動再用同一個帳號登入
+          try { google.accounts.id.disableAutoSelect(); } catch (e) {}
+          gateShow(d.error + '。可以改用其他帳號登入。'); return;
+        }
         PENDING.push(function () { rpcCall(fn, args, ok, fail); }); gateShow(d.error); return;
       }
       if (fail) fail(new Error(d.error || '呼叫失敗'));
@@ -1199,6 +1202,129 @@ q('.lc-msgs').addEventListener('scroll', function () { if (this.scrollTop < 60) 
   else if (v === 'catalog') { showCatalog(); load(true); }
   else load();
 })();
+</script>
+
+<style>
+#who { margin-left:auto; display:flex; align-items:center; gap:8px; flex-shrink:0; font-size:12.5px; color:var(--text); }
+#who .em { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#who .rl { font-size:11px; padding:1px 8px; border-radius:10px; background:var(--accent-dim); color:var(--accent); font-weight:600; }
+#who button { height:28px; padding:0 12px; border-radius:14px; border:1px solid #b0bace; background:#fff; color:var(--muted); font-size:12px; cursor:pointer; font-family:inherit; transition:background .14s; }
+#who button:hover { background:#d4daea; color:var(--navy); }
+body.role-user #sl, body.role-user #drawer-btn, body.role-user #pr, body.role-user #sw, body.role-user #sb > *:not(#who):not(.brand) { display:none !important; }
+.wu-add { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.wu-add input { flex:1; min-width:200px; height:36px; border-radius:20px; border:1px solid #b0bace; padding:0 14px; font-size:14px; font-family:inherit; outline:none; transition:border-color .2s var(--ease), box-shadow .2s var(--ease); }
+.wu-add input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.wu-add select, .wu-row select { height:36px; border-radius:20px; border:1px solid #b0bace; padding:0 10px; font-size:13px; font-family:inherit; background:#fff; color:var(--text); }
+.wu-btn { height:36px; padding:0 16px; border-radius:20px; border:none; background:#4a6fa8; color:#fff; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; transition:background .18s var(--ease), transform .1s; }
+.wu-btn:hover { background:#3a5a90; } .wu-btn:active { transform:scale(.97); }
+.wu-list { display:flex; flex-direction:column; gap:8px; }
+.wu-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--card); border:1px solid var(--border); border-left:3px solid transparent; border-radius:var(--radius); padding:10px 12px; transition:border-left-color .16s, background .16s; }
+.wu-row:hover { border-left-color:var(--accent); background:#EEF4FD; }
+.wu-row.off { opacity:.6; }
+.wu-row .em { flex:1; min-width:180px; font-size:14px; font-weight:700; color:var(--navy-dark); word-break:break-all; }
+.wu-row .sub { display:block; font-size:11px; font-weight:400; color:var(--muted); margin-top:2px; }
+.wu-tag { font-size:11px; padding:2px 8px; border-radius:10px; background:#fff3d6; color:#7a5c00; border:1px solid #ffe08a; }
+.wu-tg { height:30px; padding:0 12px; border-radius:15px; border:1px solid; font-size:12px; cursor:pointer; font-family:inherit; transition:background .14s; }
+.wu-tg.on { background:#e3f6ec; color:#1f8a55; border-color:#9ed9b8; } .wu-tg.off { background:#f0f0f0; color:#777; border-color:#ccc; }
+.wu-del { height:30px; width:30px; border-radius:7px; border:none; background:#F0F3F8; color:var(--muted); cursor:pointer; font-size:14px; transition:background .14s; }
+.wu-del:hover { background:#fde2e1; color:#c0392b; }
+.wu-msg { font-size:12.5px; margin-bottom:10px; min-height:1em; }
+.wu-note { font-size:12px; color:var(--muted); line-height:1.7; margin-top:14px; }
+</style>
+<script>
+/* ===== 全版網頁：登入身分與權限 ===== */
+var ME = null;
+(function () {
+  var sb = q('#sb'), w = document.createElement('div'); w.id = 'who';
+  w.innerHTML = '<span class="em">登入中…</span>';
+  sb.appendChild(w);
+  gsRun().withSuccessHandler(function (m) {
+    ME = m;
+    w.innerHTML = '<span class="em" title="' + esc(m.email) + '">👤 ' + esc(m.email) + '</span><span class="rl">' + (m.role === 'owner' ? '主管理員' : m.admin ? '管理員' : '使用者') + '</span><button type="button" id="logout">登出</button>';
+    q('#logout').addEventListener('click', webLogout);
+    if (!m.admin) { document.body.classList.add('role-user'); showChat(); }
+    else renderSide();
+    adjustHeight();
+  }).withFailureHandler(function (e) { w.innerHTML = '<span class="em">⚠️ ' + esc(e.message || e) + '</span>'; }).webWhoAmI('');
+})();
+function webLogout() {
+  try { sessionStorage.removeItem('uchan_idt'); } catch (e) {}
+  try { google.accounts.id.disableAutoSelect(); } catch (e) {}
+  location.reload();
+}
+/* 管理員：左側多一個「⚙️ 使用者設定」 */
+var _renderSide = renderSide;
+renderSide = function () {
+  _renderSide();
+  if (!ME || !ME.admin) return;
+  ['#sl', '#drawer-list'].forEach(function (sel) {
+    var box = q(sel); if (!box || box.querySelector('[data-v="users"]')) return;
+    var it = document.createElement('div'); it.className = 'cat-item'; it.setAttribute('data-v', 'users');
+    it.innerHTML = '<span class="nm">⚙️ 使用者設定</span>';
+    var cat = box.querySelector('[data-v="catalog"]');
+    if (cat && cat.nextSibling) box.insertBefore(it, cat.nextSibling); else box.appendChild(it);
+  });
+};
+document.addEventListener('click', function (e) {
+  var it = e.target.closest && e.target.closest('[data-v="users"]');
+  if (!it) return;
+  e.stopPropagation(); e.preventDefault();
+  try { closeDrawer(); } catch (x) {}
+  openUsers();
+}, true);
+
+/* ----- 使用者設定（新增、啟用／關閉、角色、刪除） ----- */
+function openUsers() {
+  q('#modal-box').className = 'wide';
+  q('#modal-title').textContent = '⚙️ 使用者設定';
+  q('#modal-body').innerHTML =
+    '<div class="wu-add"><input id="wu-em" type="email" placeholder="輸入要開放的 Gmail（例：someone@gmail.com）" autocomplete="off">' +
+    '<select id="wu-rl"><option value="user">使用者（只能對話）</option><option value="admin">管理員（全部功能）</option></select>' +
+    '<button type="button" class="wu-btn" id="wu-addbtn">＋ 新增</button></div>' +
+    '<div class="wu-msg" id="wu-msg"></div><div class="wu-list" id="wu-list"><p class="desc">⏳ 讀取中…</p></div>' +
+    '<div class="wu-note">・<b>使用者</b>：登入後只看得到「跟 U醬 對話」，對話以自己的 Google 帳號身分進行（只看得到自己的對話；只限帳號擁有者的功能不能用）。<br>' +
+    '・<b>管理員</b>：可看指令紀錄、指令清單、管理使用者；對話以帳號擁有者身分進行。<br>' +
+    '・關閉：暫時不能登入使用，名單保留；刪除：從名單移除。主管理員不能關閉或刪除。</div>';
+  q('#modal-overlay').className = 'on'; S.modalOpen = true;
+  q('#wu-addbtn').addEventListener('click', wuAdd);
+  q('#wu-em').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) wuAdd(); });
+  wuCall('webUsersList', []);
+}
+function wuMsg(t, bad) { var m = q('#wu-msg'); m.textContent = t || ''; m.style.color = bad ? '#c0392b' : '#1f8a55'; }
+function wuCall(fn, args, okText) {
+  var r = gsRun().withSuccessHandler(function (d) {
+    if (!d || !d.ok) { wuMsg('⚠️ ' + ((d && d.error) || '失敗'), true); return; }
+    wuRender(d); if (okText) wuMsg(okText);
+  }).withFailureHandler(function (e) { wuMsg('⚠️ ' + (e.message || e), true); });
+  r[fn].apply(null, [''].concat(args));
+}
+function wuAdd() {
+  var e = q('#wu-em').value.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { wuMsg('⚠️ 電子郵件格式不對', true); return; }
+  q('#wu-em').value = '';
+  wuCall('webUserSave', [{ e: e, r: q('#wu-rl').value, on: true }], '✅ 已新增 ' + e);
+}
+function wuRender(d) {
+  var box = q('#wu-list');
+  box.innerHTML = (d.users || []).map(function (u) {
+    var me = u.e === d.me;
+    var ctl = u.fixed ? '<span class="wu-tag">主管理員</span>' :
+      '<select data-e="' + esc(u.e) + '" class="wu-r"><option value="user"' + (u.r !== 'admin' ? ' selected' : '') + '>使用者</option><option value="admin"' + (u.r === 'admin' ? ' selected' : '') + '>管理員</option></select>' +
+      '<button type="button" class="wu-tg ' + (u.on ? 'on' : 'off') + '" data-e="' + esc(u.e) + '" data-on="' + (u.on ? 1 : 0) + '">' + (u.on ? '● 啟用中' : '○ 已關閉') + '</button>' +
+      '<button type="button" class="wu-del" data-e="' + esc(u.e) + '" title="刪除">🗑</button>';
+    return '<div class="wu-row' + (u.on ? '' : ' off') + '"><span class="em">' + esc(u.e) + (me ? '（你）' : '') +
+      (u.t ? '<span class="sub">新增於 ' + esc(u.t) + '</span>' : '') + '</span>' + ctl + '</div>';
+  }).join('') || '<p class="desc">目前沒有其他使用者</p>';
+  box.querySelectorAll('.wu-r').forEach(function (s) { s.addEventListener('change', function () {
+    wuCall('webUserSave', [{ e: s.getAttribute('data-e'), r: s.value }], '✅ 已更新角色'); }); });
+  box.querySelectorAll('.wu-tg').forEach(function (b) { b.addEventListener('click', function () {
+    var on = b.getAttribute('data-on') !== '1';
+    wuCall('webUserSave', [{ e: b.getAttribute('data-e'), on: on }], on ? '✅ 已啟用' : '✅ 已關閉'); }); });
+  box.querySelectorAll('.wu-del').forEach(function (b) { b.addEventListener('click', function () {
+    var e = b.getAttribute('data-e');
+    if (!confirm('確定要刪除 ' + e + '？刪除後這個帳號就不能登入。')) return;
+    wuCall('webUserDelete', [e], '✅ 已刪除 ' + e); }); });
+}
 </script>
 </body>
 </html>
