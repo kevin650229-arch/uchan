@@ -212,6 +212,14 @@ button, input, select { font-family:inherit; }
 .lc-input button { flex-shrink:0; height:36px; border:none; border-radius:18px; cursor:pointer; font-size:13px; font-family:inherit; transition:background .14s; }
 #lc-menu { background:#eef1f6; color:var(--navy); padding:0 12px; }
 #lc-menu:hover, #lc-menu.act { background:#dfe5f0; }
+#lc-file { background:#eef1f6; color:var(--navy); padding:0 10px; font-size:16px; }
+#lc-file:hover { background:#dfe5f0; } #lc-file:disabled { opacity:.5; cursor:default; }
+.lc-msgs.drop { outline:3px dashed rgba(255,255,255,.85); outline-offset:-10px; }
+.lc-bub.file { display:flex; align-items:center; gap:10px; }
+.lc-bub.file .fi { font-size:28px; line-height:1; }
+.lc-bub.file .fn { font-weight:600; word-break:break-all; } .lc-bub.file .fs { font-size:11.5px; opacity:.7; }
+.lc-bub.photo { padding:4px; background:transparent !important; }
+.lc-bub.photo img { max-width:220px; max-height:260px; border-radius:14px; }
 #lc-send { background:#06c755; color:#fff; padding:0 16px; font-weight:600; }
 #lc-send:hover { background:#05b04c; } #lc-send:disabled { background:#b9c4d2; cursor:default; }
 #lc-text { flex:1; min-width:0; height:36px; border-radius:18px; border:1px solid #d5dbe5; background:#f4f6fa; padding:0 14px; font-size:14px; outline:none; font-family:inherit;
@@ -353,7 +361,7 @@ button, input, select { font-family:inherit; }
       <div class="lc-head"><div class="ttl"><img id="lc-av-head" alt=""><span id="lc-ttl">U醬</span></div><button type="button" id="lc-clear">重新整理</button></div>
       <div class="lc-msgs"></div>
       <div class="lc-qr"></div>
-      <div class="lc-input"><button type="button" id="lc-menu">≡ 選單</button><input id="lc-text" type="text" placeholder="輸入訊息" autocomplete="off"><button type="button" id="lc-send">傳送</button></div>
+      <div class="lc-input"><button type="button" id="lc-menu">≡ 選單</button><button type="button" id="lc-file" title="傳照片或檔案給 U醬（也可以拖曳或貼上）">📎</button><input id="lc-fin" type="file" hidden><input id="lc-text" type="text" placeholder="輸入訊息" autocomplete="off"><button type="button" id="lc-send">傳送</button></div>
       <div class="lc-rich"><div class="lc-tabs"></div><div class="lc-grid"></div></div>
     </div>
   </div>
@@ -789,6 +797,7 @@ function stepName(x) {
   if (n === '意圖判斷') return '🧠 理解你的意思';
   if (/^AI：/.test(n)) return '✨ AI ' + (x.p ? x.p + (x.m ? '・' + x.m.replace(/^.*\//, '') : '') : '') + (x.i || x.u ? '（' + ((x.i || 0) + (x.u || 0)).toLocaleString() + ' token）' : '');
   if (/^執行：/.test(n)) return '⚙️ ' + n.replace(/^執行：/, '');
+  if (/保存檔案|轉文字/.test(n)) return '📁 ' + n;
   if (x.c === 'svc') return '📡 交給' + n.replace(/：.*$/, '') + '處理';
   if (n === 'LINE 回覆') return '💬 整理回覆';
   if (n === '存對話上下文') return '🧷 記住這次對話';
@@ -901,6 +910,75 @@ function procEnd(pr, d, err) {
     '<span class="pc-s">' + (ms / 1000).toFixed(1) + 's' + (d && d.tok ? '・' + d.tok.toLocaleString() + ' token' : '') + '</span><span class="pc-tg" title="查看處理過程">▾</span>';
   if (d) { procSteps(pr, d.trace, false); if (d.note) e.querySelector('.pc-note').textContent = '理解為：' + d.note; }
 }
+
+/* ----- 照片與檔案（📎、拖曳、貼上）：轉成 base64 交給 U醬（52_檔案處理.js）；大照片先在瀏覽器縮小 ----- */
+var FILE_MAX = 20 * 1024 * 1024;
+function fileIcon(name, type) {
+  var e = (String(name).match(/\.([a-z0-9]+)$/i) || [])[1] || ''; e = e.toLowerCase();
+  if (/^image\//.test(type)) return '🖼'; if (e === 'pdf') return '📄'; if (/^audio\//.test(type)) return '🎙'; if (/^video\//.test(type)) return '🎬';
+  if (/^(docx?|rtf|odt)$/.test(e)) return '📝'; if (/^(xlsx?|ods|csv)$/.test(e)) return '📊'; if (/^(pptx?|odp)$/.test(e)) return '📽'; if (/^text\//.test(type)) return '📃';
+  return '📎';
+}
+function fileSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+function lcMeFile(f, url, text) {
+  lcDay();
+  var r = document.createElement('div'); r.className = 'lc-row me';
+  var bub = url ? '<div class="lc-bub photo"><img src="' + url + '" alt=""></div>'
+    : '<div class="lc-bub file"><span class="fi">' + fileIcon(f.name, f.type) + '</span><span><div class="fn">' + esc(f.name) + '</div><div class="fs">' + fileSize(f.size) + '</div></span></div>';
+  r.innerHTML = '<div class="lc-col"><div class="lc-line">' + bub + '<div class="lc-tm">已讀<br>' + esc(hhmm()) + '</div></div>' +
+    (text ? '<div class="lc-line"><div class="lc-bub">' + esc(text) + '</div></div>' : '') + '</div>';
+  msgsEl().appendChild(r); lcScroll();
+  var img = r.querySelector('img'); if (img) img.addEventListener('load', lcScroll);
+}
+/** 照片超過 1.5MB 或邊長超過 2000px：縮成長邊 2000px 的 JPEG（GIF、HEIC 不處理） */
+function shrinkImage(f, cb) {
+  if (!/^image\/(jpeg|png|webp|bmp)$/.test(f.type)) return cb(null);
+  var url = URL.createObjectURL(f), im = new Image();
+  im.onload = function () {
+    var w = im.naturalWidth, h = im.naturalHeight, k = Math.min(1, 2000 / Math.max(w, h));
+    if (k === 1 && f.size <= 1.5 * 1024 * 1024) { URL.revokeObjectURL(url); return cb(null); }
+    var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    cb(c.toDataURL('image/jpeg', 0.85));
+  };
+  im.onerror = function () { URL.revokeObjectURL(url); cb(null); };
+  im.src = url;
+}
+function lcFile(f) {
+  if (!f || C.busy) return;
+  if (f.size > FILE_MAX) { lcSys('⚠️ 檔案太大（' + fileSize(f.size) + '），網頁上傳上限 20MB'); return; }
+  var text = q('#lc-text').value.trim(); q('#lc-text').value = '';   // 一起輸入的文字 = 要問這個檔案的問題
+  var isImg = /^image\//.test(f.type) && !/heic|heif/.test(f.type);
+  function go(dataUrl, name, type) {
+    lcMeFile(f, isImg ? dataUrl : '', text);
+    lcSend({ file: { name: name, mime: type, b64: dataUrl.substring(dataUrl.indexOf(',') + 1) }, text: text }, '');
+  }
+  shrinkImage(f, function (small) {
+    if (small) return go(small, f.name.replace(/\.[a-z0-9]+$/i, '') + '.jpg', 'image/jpeg');
+    var rd = new FileReader();
+    rd.onload = function () { go(rd.result, f.name, f.type || ''); };
+    rd.onerror = function () { lcSys('⚠️ 讀不到這個檔案'); };
+    rd.readAsDataURL(f);
+  });
+}
+q('#lc-file').addEventListener('click', function () { if (!C.busy) q('#lc-fin').click(); });
+q('#lc-fin').addEventListener('change', function () { var f = this.files[0]; this.value = ''; lcFile(f); });
+(function () {
+  var m = q('.lc-msgs'), n = 0;
+  m.addEventListener('dragenter', function (e) { if (e.dataTransfer && [].indexOf.call(e.dataTransfer.types, 'Files') >= 0) { n++; m.classList.add('drop'); e.preventDefault(); } });
+  m.addEventListener('dragover', function (e) { if (m.classList.contains('drop')) e.preventDefault(); });
+  m.addEventListener('dragleave', function () { if (--n <= 0) { n = 0; m.classList.remove('drop'); } });
+  m.addEventListener('drop', function (e) { n = 0; m.classList.remove('drop'); var f = e.dataTransfer && e.dataTransfer.files[0]; if (f) { e.preventDefault(); lcFile(f); } });
+  q('#lc-text').addEventListener('paste', function (e) {
+    var it = [].filter.call((e.clipboardData && e.clipboardData.items) || [], function (x) { return x.kind === 'file'; })[0];
+    if (!it) return;
+    var f = it.getAsFile(); if (!f) return;
+    e.preventDefault();
+    if (!f.name || f.name === 'image.png') f = new File([f], '貼上的圖片_' + hhmm().replace(':', '') + '.png', { type: f.type });
+    lcFile(f);
+  });
+})();
 
 function lcSubmit() {
   var t = q('#lc-text').value.trim(); if (!t || C.busy) return;
