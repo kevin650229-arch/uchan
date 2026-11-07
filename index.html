@@ -1181,7 +1181,7 @@ function lcHistory(initial) {
       while (frag.lastChild) box.insertBefore(frag.lastChild, box.firstChild);
       box.scrollTop = oldTop + (box.scrollHeight - oldH);   // 維持原本看的位置
     }
-  }).withFailureHandler(function (e) { C.hLoading = false; top.remove(); lcSys('⚠️ ' + (e.message || e)); }).cmdChatHistory(KEY, initial ? '' : C.cursor, 15);
+  }).withFailureHandler(function (e) { C.hLoading = false; top.remove(); lcSys('⚠️ ' + (e.message || e)); }).cmdChatHistory(KEY, initial ? '' : C.cursor, 15, C.view || '');   // C.view：主管理員查看某位網頁使用者的對話（全版網頁）
 }
 function lcClear() { q('.lc-msgs').innerHTML = ''; C.lastDay = ''; C.cursor = ''; C.more = true; lcQuick(null); lcHistory(true); }
 
@@ -1229,6 +1229,15 @@ body.role-user #sl, body.role-user #drawer-btn, body.role-user #pr, body.role-us
 .wu-del { height:30px; width:30px; border-radius:7px; border:none; background:#F0F3F8; color:var(--muted); cursor:pointer; font-size:14px; transition:background .14s; }
 .wu-del:hover { background:#fde2e1; color:#c0392b; }
 .wu-msg { font-size:12.5px; margin-bottom:10px; min-height:1em; }
+.wu-id { width:110px; height:32px; border-radius:16px; border:1px solid #b0bace; padding:0 10px; font-size:13px; font-family:inherit; outline:none; }
+.wu-id:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.wu-add .wu-id { height:36px; width:130px; flex:none; min-width:0; }
+.wu-chat { height:30px; padding:0 12px; border-radius:15px; border:1px solid #b0bace; background:#fff; color:var(--accent); font-size:12px; cursor:pointer; font-family:inherit; transition:background .14s; }
+.wu-chat:hover { background:#EEF4FD; }
+.lc-viewbar { display:none; align-items:center; gap:10px; padding:7px 14px; background:#fff8e1; color:#7a5c00; font-size:12.5px; border-bottom:1px solid #ffe08a; flex-shrink:0; }
+.lc-viewbar button { margin-left:auto; height:28px; padding:0 12px; border-radius:14px; border:1px solid #e0c060; background:#fff; color:#7a5c00; cursor:pointer; font-family:inherit; font-size:12px; }
+body.viewing .lc-viewbar { display:flex; }
+body.viewing .lc-input, body.viewing .lc-qr, body.viewing .lc-rich { display:none !important; }
 .wu-note { font-size:12px; color:var(--muted); line-height:1.7; margin-top:14px; }
 </style>
 <script>
@@ -1279,12 +1288,15 @@ function openUsers() {
   q('#modal-title').textContent = '⚙️ 使用者設定';
   q('#modal-body').innerHTML =
     '<div class="wu-add"><input id="wu-em" type="email" placeholder="輸入要開放的 Gmail（例：someone@gmail.com）" autocomplete="off">' +
+    '<input id="wu-id" class="wu-id" placeholder="職編（選填）" autocomplete="off">' +
     '<select id="wu-rl"><option value="user">使用者（只能對話）</option><option value="admin">管理員（全部功能）</option></select>' +
     '<button type="button" class="wu-btn" id="wu-addbtn">＋ 新增</button></div>' +
     '<div class="wu-msg" id="wu-msg"></div><div class="wu-list" id="wu-list"><p class="desc">⏳ 讀取中…</p></div>' +
     '<div class="wu-note">・<b>使用者</b>：登入後只看得到「跟 U醬 對話」。<br>' +
     '・<b>管理員</b>：另外可看指令紀錄、指令清單、管理使用者。<br>' +
     '・<b>對話</b>：除了主管理員（和 LINE 同一份對話），每個人都有自己獨立的對話內容，只看得到自己的；只限帳號擁有者的功能（公文、員工查詢等）不能用。<br>' +
+    '・職編：對應的公司人員，會顯示姓名與單位，指令紀錄裡也會用姓名顯示。<br>' +
+    '・💬 對話紀錄（只有主管理員）：以唯讀方式查看這個人跟 U醬 的對話。<br>' +
     '・關閉：暫時不能登入使用，名單保留；刪除：從名單移除。主管理員不能關閉或刪除。</div>';
   q('#modal-overlay').className = 'on'; S.modalOpen = true;
   q('#wu-addbtn').addEventListener('click', wuAdd);
@@ -1303,17 +1315,21 @@ function wuAdd() {
   var e = q('#wu-em').value.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { wuMsg('⚠️ 電子郵件格式不對', true); return; }
   q('#wu-em').value = '';
-  wuCall('webUserSave', [{ e: e, r: q('#wu-rl').value, on: true }], '✅ 已新增 ' + e);
+  var id = q('#wu-id').value.trim(); q('#wu-id').value = '';
+  wuCall('webUserSave', [{ e: e, r: q('#wu-rl').value, on: true, id: id }], '✅ 已新增 ' + e);
 }
 function wuRender(d) {
   var box = q('#wu-list');
   box.innerHTML = (d.users || []).map(function (u) {
     var me = u.e === d.me;
-    var ctl = u.fixed ? '<span class="wu-tag">主管理員</span>' :
+    var idIn = u.fixed ? '' : '<input class="wu-id" data-e="' + esc(u.e) + '" value="' + esc(u.id || '') + '" placeholder="職編" title="對應的公司職編，輸入後按 Enter">';
+    var chat = (!u.fixed && ME && ME.owner) ? '<button type="button" class="wu-chat" data-e="' + esc(u.e) + '" data-n="' + esc(u.n || '') + '">💬 對話紀錄</button>' : '';
+    var ctl = u.fixed ? '<span class="wu-tag">主管理員</span>' : idIn + chat +
       '<select data-e="' + esc(u.e) + '" class="wu-r"><option value="user"' + (u.r !== 'admin' ? ' selected' : '') + '>使用者</option><option value="admin"' + (u.r === 'admin' ? ' selected' : '') + '>管理員</option></select>' +
       '<button type="button" class="wu-tg ' + (u.on ? 'on' : 'off') + '" data-e="' + esc(u.e) + '" data-on="' + (u.on ? 1 : 0) + '">' + (u.on ? '● 啟用中' : '○ 已關閉') + '</button>' +
       '<button type="button" class="wu-del" data-e="' + esc(u.e) + '" title="刪除">🗑</button>';
     return '<div class="wu-row' + (u.on ? '' : ' off') + '"><span class="em">' + esc(u.e) + (me ? '（你）' : '') +
+      ((u.n || u.id) ? '<span class="sub">👤 ' + esc(u.n ? u.n + '（' + u.id + '）' + (u.d ? '・' + u.d : '') : u.id + '（查不到姓名）') + '</span>' : '') +
       (u.t ? '<span class="sub">新增於 ' + esc(u.t) + '</span>' : '') + '</span>' + ctl + '</div>';
   }).join('') || '<p class="desc">目前沒有其他使用者</p>';
   box.querySelectorAll('.wu-r').forEach(function (s) { s.addEventListener('change', function () {
@@ -1321,10 +1337,33 @@ function wuRender(d) {
   box.querySelectorAll('.wu-tg').forEach(function (b) { b.addEventListener('click', function () {
     var on = b.getAttribute('data-on') !== '1';
     wuCall('webUserSave', [{ e: b.getAttribute('data-e'), on: on }], on ? '✅ 已啟用' : '✅ 已關閉'); }); });
+  box.querySelectorAll('input.wu-id').forEach(function (inp) {
+    function save() { if (inp.value.trim() === (inp.defaultValue || '').trim()) return; wuCall('webUserSave', [{ e: inp.getAttribute('data-e'), id: inp.value.trim() }], '✅ 已更新職編'); }
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) save(); });
+    inp.addEventListener('blur', save);
+  });
+  box.querySelectorAll('.wu-chat').forEach(function (b) { b.addEventListener('click', function () {
+    viewChatOf(b.getAttribute('data-e'), b.getAttribute('data-n')); }); });
   box.querySelectorAll('.wu-del').forEach(function (b) { b.addEventListener('click', function () {
     var e = b.getAttribute('data-e');
     if (!confirm('確定要刪除 ' + e + '？刪除後這個帳號就不能登入。')) return;
     wuCall('webUserDelete', [e], '✅ 已刪除 ' + e); }); });
+}
+
+/* ----- 主管理員：唯讀查看某位使用者的對話 ----- */
+(function () {
+  var bar = document.createElement('div'); bar.className = 'lc-viewbar';
+  bar.innerHTML = '<span id="lc-viewwho"></span><button type="button" id="lc-viewexit">返回我的對話</button>';
+  var head = q('#chatv .lc-head'); head.parentNode.insertBefore(bar, head.nextSibling);
+  q('#lc-viewexit').addEventListener('click', function () { C.view = ''; document.body.classList.remove('viewing'); lcClear(); });
+})();
+function viewChatOf(email, name) {
+  closeModal();
+  C.view = email;
+  q('#lc-viewwho').textContent = '👀 正在查看 ' + (name ? name + '（' + email + '）' : email) + ' 的對話（唯讀）';
+  document.body.classList.add('viewing');
+  if (S.view !== 'chat' || !C.init) showChat();
+  if (C.init) lcClear();
 }
 </script>
 </body>
