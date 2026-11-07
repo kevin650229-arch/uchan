@@ -1282,8 +1282,9 @@ function openUsers() {
     '<select id="wu-rl"><option value="user">使用者（只能對話）</option><option value="admin">管理員（全部功能）</option></select>' +
     '<button type="button" class="wu-btn" id="wu-addbtn">＋ 新增</button></div>' +
     '<div class="wu-msg" id="wu-msg"></div><div class="wu-list" id="wu-list"><p class="desc">⏳ 讀取中…</p></div>' +
-    '<div class="wu-note">・<b>使用者</b>：登入後只看得到「跟 U醬 對話」，對話以自己的 Google 帳號身分進行（只看得到自己的對話；只限帳號擁有者的功能不能用）。<br>' +
-    '・<b>管理員</b>：可看指令紀錄、指令清單、管理使用者；對話以帳號擁有者身分進行。<br>' +
+    '<div class="wu-note">・<b>使用者</b>：登入後只看得到「跟 U醬 對話」。<br>' +
+    '・<b>管理員</b>：另外可看指令紀錄、指令清單、管理使用者。<br>' +
+    '・<b>對話</b>：除了主管理員（和 LINE 同一份對話），每個人都有自己獨立的對話內容，只看得到自己的；只限帳號擁有者的功能（公文、員工查詢等）不能用。<br>' +
     '・關閉：暫時不能登入使用，名單保留；刪除：從名單移除。主管理員不能關閉或刪除。</div>';
   q('#modal-overlay').className = 'on'; S.modalOpen = true;
   q('#wu-addbtn').addEventListener('click', wuAdd);
