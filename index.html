@@ -1156,6 +1156,7 @@ function lcHistory(initial) {
     C.hLoading = false; top.remove();
     if (!h || !h.ok) { lcSys('⚠️ ' + ((h && h.error) || '讀取對話紀錄失敗')); return; }
     Object.assign(C.imgs, h.imgs || {});
+    if (h.who) C.who = h.who;                             // 查看別人的對話：對方的姓名與大頭照（全版網頁）
     C.cursor = h.cursor || C.cursor; C.more = !!h.more;
     var frag = document.createElement('div'), saveDay = C.lastDay;
     C.tgt = frag; C.lastDay = '';
@@ -1240,6 +1241,11 @@ body.role-user #sl, body.role-user #drawer-btn, body.role-user #pr, body.role-us
 .lc-viewbar button { margin-left:auto; height:28px; padding:0 12px; border-radius:14px; border:1px solid #e0c060; background:#fff; color:#7a5c00; cursor:pointer; font-family:inherit; font-size:12px; }
 body.viewing .lc-viewbar { display:flex; }
 body.viewing .lc-input, body.viewing .lc-qr, body.viewing .lc-rich { display:none !important; }
+.me-av { width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #D5DAE0; overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.me-av img { width:34px; height:34px; object-fit:contain; display:block; }
+.me-av .ini { color:#1a3a6b; font-weight:700; font-size:15px; }
+.lc-row.me .lc-name { text-align:right; }
+#who .me-av { width:28px; height:28px; } #who .me-av img { width:26px; height:26px; } #who .me-av .ini { font-size:12px; }
 .wu-note { font-size:12px; color:var(--muted); line-height:1.7; margin-top:14px; }
 </style>
 <script>
@@ -1251,9 +1257,11 @@ var ME = null;
   sb.appendChild(w);
   gsRun().withSuccessHandler(function (m) {
     ME = m;
-    w.innerHTML = '<span class="em" title="' + esc(m.email) + '">👤 ' + esc(m.email) + '</span><span class="rl">' + (m.role === 'owner' ? '主管理員' : m.admin ? '管理員' : '使用者') + '</span><button type="button" id="logout">登出</button>';
+    var p = m.me || {};
+    w.innerHTML = (p.n || p.photo ? meAv(p) : '') + '<span class="em" title="' + esc(m.email) + '">' + (p.n ? esc(p.n) : '👤 ' + esc(m.email)) + '</span><span class="rl">' + (m.role === 'owner' ? '主管理員' : m.admin ? '管理員' : '使用者') + '</span><button type="button" id="logout">登出</button>';
     q('#logout').addEventListener('click', webLogout);
     if (!m.admin) { document.body.classList.add('role-user'); showChat(); }
+    else if (S.view === 'chat' && C.init && (p.n || p.photo)) lcClear();   // 對話已經先畫好了：重畫一次帶上大頭照
     else renderSide();
     adjustHeight();
   }).withFailureHandler(function (e) { w.innerHTML = '<span class="em">⚠️ ' + esc(e.message || e) + '</span>'; }).webWhoAmI('');
@@ -1324,9 +1332,9 @@ function wuRender(d) {
   var box = q('#wu-list');
   box.innerHTML = (d.users || []).map(function (u) {
     var me = u.e === d.me;
-    var idIn = u.fixed ? '' : '<input class="wu-id" data-e="' + esc(u.e) + '" value="' + esc(u.id || '') + '" placeholder="職編" title="對應的公司職編，輸入後按 Enter">';
+    var idIn = '<input class="wu-id" data-e="' + esc(u.e) + '" value="' + esc(u.id || '') + '" placeholder="職編" title="對應的公司職編，輸入後按 Enter">';
     var chat = (!u.fixed && ME && ME.owner) ? '<button type="button" class="wu-chat" data-e="' + esc(u.e) + '" data-n="' + esc(u.n || '') + '">💬 對話紀錄</button>' : '';
-    var ctl = u.fixed ? '<span class="wu-tag">主管理員</span>' : idIn + chat +
+    var ctl = u.fixed ? idIn + '<span class="wu-tag">主管理員</span>' : idIn + chat +
       '<select data-e="' + esc(u.e) + '" class="wu-r"><option value="user"' + (u.r !== 'admin' ? ' selected' : '') + '>使用者</option><option value="admin"' + (u.r === 'admin' ? ' selected' : '') + '>管理員</option></select>' +
       '<button type="button" class="wu-tg ' + (u.on ? 'on' : 'off') + '" data-e="' + esc(u.e) + '" data-on="' + (u.on ? 1 : 0) + '">' + (u.on ? '● 啟用中' : '○ 已關閉') + '</button>' +
       '<button type="button" class="wu-del" data-e="' + esc(u.e) + '" title="刪除">🗑</button>';
@@ -1352,16 +1360,33 @@ function wuRender(d) {
     wuCall('webUserDelete', [e], '✅ 已刪除 ' + e); }); });
 }
 
+/* ----- 對話框：自己（或正在查看的人）的大頭照與姓名 ----- */
+function meAv(p) {
+  if (!p) return '';
+  if (p.photo) return '<div class="me-av"><img src="' + esc(p.photo) + '" alt=""></div>';
+  if (p.n) return '<div class="me-av"><span class="ini">' + esc(p.n.charAt(0)) + '</span></div>';
+  return '';
+}
+function meProfile() { return C.view ? (C.who || null) : (ME && ME.me) || null; }
+lcMe = function (text, t, noSave, d) {
+  lcDay(d);
+  var p = meProfile();
+  var r = document.createElement('div'); r.className = 'lc-row me';
+  r.innerHTML = '<div class="lc-col">' + (p && p.n ? '<div class="lc-name">' + esc(p.n) + '</div>' : '') +
+    '<div class="lc-line"><div class="lc-bub">' + esc(text) + '</div><div class="lc-tm">已讀<br>' + esc(t || hhmm()) + '</div></div></div>' + meAv(p);
+  msgsEl().appendChild(r); lcScroll();
+};
+
 /* ----- 主管理員：唯讀查看某位使用者的對話 ----- */
 (function () {
   var bar = document.createElement('div'); bar.className = 'lc-viewbar';
   bar.innerHTML = '<span id="lc-viewwho"></span><button type="button" id="lc-viewexit">返回我的對話</button>';
   var head = q('#chatv .lc-head'); head.parentNode.insertBefore(bar, head.nextSibling);
-  q('#lc-viewexit').addEventListener('click', function () { C.view = ''; document.body.classList.remove('viewing'); lcClear(); });
+  q('#lc-viewexit').addEventListener('click', function () { C.view = ''; C.who = null; document.body.classList.remove('viewing'); lcClear(); });
 })();
 function viewChatOf(email, name) {
   closeModal();
-  C.view = email;
+  C.view = email; C.who = null;
   q('#lc-viewwho').textContent = '👀 正在查看 ' + (name ? name + '（' + email + '）' : email) + ' 的對話（唯讀）';
   document.body.classList.add('viewing');
   if (S.view !== 'chat' || !C.init) showChat();
