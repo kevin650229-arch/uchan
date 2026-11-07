@@ -383,8 +383,9 @@ button, input, select { font-family:inherit; }
 <script>
 /* ===== 全版網頁：Google 登入＋呼叫 U醬（取代 google.script.run） ===== */
 var WEB = {"exec":"https://script.google.com/macros/s/AKfycby_BR4tGlRdgJNZGB6eAsZf4tuXRwY6pa8AJ3FmQNQH1-y08fMDmQFD7jTr9flcKySA_g/exec","clientId":"5627191315-q7frftslad7g9lu29qqrat1hs6je31mv.apps.googleusercontent.com"};
-var IDT = '';
-try { IDT = sessionStorage.getItem('uchan_idt') || ''; } catch (e) { /* 忽略 */ }
+var IDT = '', ST = '';   // ST：U醬 發的 12 小時登入 session（Google 的 ID token 只有 1 小時）
+try { IDT = sessionStorage.getItem('uchan_idt') || ''; ST = localStorage.getItem('uchan_st') || ''; } catch (e) { /* 忽略 */ }
+var PROMPTED = 0;
 var PENDING = [], GIS_READY = false;
 function gateShow(msg) {
   document.getElementById('gate').className = 'on';
@@ -392,7 +393,7 @@ function gateShow(msg) {
   gisInit();
 }
 function gisInit() {
-  if (GIS_READY) { try { google.accounts.id.prompt(); } catch (e) {} return; }
+  if (GIS_READY) { if (Date.now() - PROMPTED > 30000) { PROMPTED = Date.now(); try { google.accounts.id.prompt(); } catch (e) {} } return; }
   if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(gisInit, 200); return; }
   GIS_READY = true;
   google.accounts.id.initialize({ client_id: WEB.clientId, auto_select: true, cancel_on_tap_outside: false, callback: function (r) {
@@ -401,16 +402,17 @@ function gisInit() {
     var p = PENDING; PENDING = []; p.forEach(function (f) { f(); });
   } });
   google.accounts.id.renderButton(document.getElementById('gate-btn'), { theme: 'outline', size: 'large', text: 'signin_with', locale: 'zh-TW' });
-  google.accounts.id.prompt();
+  PROMPTED = Date.now(); google.accounts.id.prompt();
 }
 function rpcCall(fn, args, ok, fail) {
-  if (!IDT) { PENDING.push(function () { rpcCall(fn, args, ok, fail); }); gateShow(''); return; }
-  fetch(WEB.exec, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: fn, args: args, idt: IDT }) })
+  if (!IDT && !ST) { PENDING.push(function () { rpcCall(fn, args, ok, fail); }); gateShow(''); return; }
+  fetch(WEB.exec, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ rpc: fn, args: args, st: ST, idt: IDT }) })
     .then(function (r) { return r.json(); })
     .then(function (d) {
+      if (d.st) { ST = d.st; try { localStorage.setItem('uchan_st', ST); } catch (e) {} }
       if (d.ok) { if (ok) ok(d.result); return; }
       if (d.auth) {
-        IDT = ''; try { sessionStorage.removeItem('uchan_idt'); } catch (e) {}
+        IDT = ''; ST = ''; try { sessionStorage.removeItem('uchan_idt'); localStorage.removeItem('uchan_st'); } catch (e) {}
         if (d.denied) {                                  // 這個帳號不在名單或已關閉：不要自動再用同一個帳號登入
           try { google.accounts.id.disableAutoSelect(); } catch (e) {}
           gateShow(d.error + '。可以改用其他帳號登入。'); return;
@@ -1257,7 +1259,7 @@ var ME = null;
   }).withFailureHandler(function (e) { w.innerHTML = '<span class="em">⚠️ ' + esc(e.message || e) + '</span>'; }).webWhoAmI('');
 })();
 function webLogout() {
-  try { sessionStorage.removeItem('uchan_idt'); } catch (e) {}
+  try { sessionStorage.removeItem('uchan_idt'); localStorage.removeItem('uchan_st'); } catch (e) {}
   try { google.accounts.id.disableAutoSelect(); } catch (e) {}
   location.reload();
 }
