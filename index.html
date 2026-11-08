@@ -764,8 +764,15 @@ function showChat() {
 function hideChat() { q('#chatv').className = ''; q('#ml').style.display = ''; }
 
 /* ----- 送出 ----- */
+function lcViewOnly() {
+  var n = Date.now(); if (C.voT && n - C.voT < 3000) return; C.voT = n;   // 連點只提示一次
+  var e = document.createElement('div'); e.className = 'lc-day'; e.textContent = '👀 唯讀查看中，按鈕不會執行（要操作請按上方「返回我的對話」）';
+  q('.lc-msgs').appendChild(e); var m = q('.lc-msgs'); m.scrollTop = m.scrollHeight;
+  setTimeout(function () { e.remove(); }, 3000);
+}
 function lcSend(inp, shown) {
   if (C.busy) return;
+  if (C.view) { lcViewOnly(); return; }                 // 唯讀：任何送出都擋下（保險）
   if (shown) lcMe(shown);
   lcQuick(null);
   C.busy = true; q('#lc-send').disabled = true;
@@ -986,6 +993,7 @@ function lcSubmit() {
 }
 function doAction(a) {
   if (!a) return;
+  if (C.view) { lcViewOnly(); return; }                 // 唯讀查看別人的對話：卡片按鈕、快速回覆都不執行
   if (a.type === 'postback') lcSend({ data: a.data }, a.displayText || '');
   else if (a.type === 'message') lcSend({ text: a.text }, a.text);
   else if (a.type === 'uri') window.open(a.uri, '_blank');
@@ -1326,6 +1334,7 @@ body.role-user #sl, body.role-user #drawer-btn, body.role-user #pr, body.role-us
 .lc-viewbar button { margin-left:auto; height:28px; padding:0 12px; border-radius:14px; border:1px solid #e0c060; background:#fff; color:#7a5c00; cursor:pointer; font-family:inherit; font-size:12px; }
 body.viewing .lc-viewbar { display:flex; }
 body.viewing .lc-input, body.viewing .lc-qr, body.viewing .lc-rich { display:none !important; }
+body.viewing .lc-msgs button, body.viewing .lc-msgs [role="button"] { cursor:not-allowed !important; }
 .me-av { width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #D5DAE0; overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .me-av img { width:34px; height:34px; object-fit:contain; display:block; }
 .me-av .ini { color:#1a3a6b; font-weight:700; font-size:15px; }
