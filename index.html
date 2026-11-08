@@ -390,7 +390,7 @@ button, input, select { font-family:inherit; }
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 /* ===== 全版網頁：Google 登入＋呼叫 U醬（取代 google.script.run） ===== */
-var WEB = {"exec":"https://script.google.com/macros/s/AKfycby_BR4tGlRdgJNZGB6eAsZf4tuXRwY6pa8AJ3FmQNQH1-y08fMDmQFD7jTr9flcKySA_g/exec","clientId":"5627191315-q7frftslad7g9lu29qqrat1hs6je31mv.apps.googleusercontent.com"};
+var WEB = {"exec":"https://mis.usec.com.tw/uchan-api/svc/hub","clientId":"5627191315-q7frftslad7g9lu29qqrat1hs6je31mv.apps.googleusercontent.com"};
 var IDT = '', ST = '';   // ST：U醬 發的 12 小時登入 session（Google 的 ID token 只有 1 小時）
 try { IDT = sessionStorage.getItem('uchan_idt') || ''; ST = localStorage.getItem('uchan_st') || ''; } catch (e) { /* 忽略 */ }
 var PROMPTED = 0;
