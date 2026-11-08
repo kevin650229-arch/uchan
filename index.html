@@ -1331,6 +1331,15 @@ body.viewing .lc-input, body.viewing .lc-qr, body.viewing .lc-rich { display:non
 .me-av .ini { color:#1a3a6b; font-weight:700; font-size:15px; }
 .lc-row.me .lc-name { text-align:right; }
 #who .me-av { width:28px; height:28px; } #who .me-av img { width:26px; height:26px; } #who .me-av .ini { font-size:12px; }
+.st-tabs { display:flex; gap:6px; margin-bottom:14px; border-bottom:1px solid var(--border); }
+.st-tabs button { height:36px; padding:0 16px; border:none; border-bottom:3px solid transparent; background:none; font-size:14px; font-weight:600; color:var(--muted); cursor:pointer; font-family:inherit; transition:color .14s, border-color .14s; }
+.st-tabs button:hover { color:var(--navy); } .st-tabs button.act { color:var(--navy-dark); border-bottom-color:#f0c040; }
+.wu-doms { display:inline-flex; gap:4px; flex-wrap:wrap; }
+.wu-dom { display:inline-flex; align-items:center; gap:4px; height:28px; padding:0 9px; border-radius:14px; border:1px solid #cdd3de; background:#f4f6fa; color:var(--muted); font-size:12px; cursor:pointer; user-select:none; transition:background .14s, color .14s, border-color .14s; }
+.wu-dom:has(input:checked) { background:#e3f6ec; color:#1f8a55; border-color:#9ed9b8; }
+.wu-dom input, .wu-add .wu-dom input { margin:0; accent-color:#1f8a55; flex:none; min-width:0; width:auto; height:auto; padding:0; border:none; box-shadow:none; }
+.wu-add .wu-doms { flex-basis:100%; }
+.wu-dom:has(input:disabled) { cursor:default; opacity:.85; }
 .wu-note { font-size:12px; color:var(--muted); line-height:1.7; margin-top:14px; }
 .ak-dom { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
 .ak-h { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:14.5px; color:var(--navy-dark); }
@@ -1393,13 +1402,9 @@ renderSide = function () {
   ['#sl', '#drawer-list'].forEach(function (sel) {
     var box = q(sel); if (!box || box.querySelector('[data-v="users"]')) return;
     var it = document.createElement('div'); it.className = 'cat-item'; it.setAttribute('data-v', 'users');
-    it.innerHTML = '<span class="nm">⚙️ 使用者設定</span>';
+    it.innerHTML = '<span class="nm">⚙️ 設定</span>';
     var cat = box.querySelector('[data-v="catalog"]');
     if (cat && cat.nextSibling) box.insertBefore(it, cat.nextSibling); else box.appendChild(it);
-    var ak = document.createElement('div'); ak.className = 'cat-item'; ak.setAttribute('data-v', 'aikeys');   // 管理員：各領域的 AI 金鑰
-    ak.innerHTML = '<span class="nm">🔑 AI 金鑰</span>';
-    box.insertBefore(ak, it.nextSibling);
-    it = ak;
     if (ME.owner && ACCTS.length) {                       // 各帳號的對話紀錄
       var h = document.createElement('div'); h.className = 'cat-head'; h.textContent = '帳號對話紀錄';
       var anchor = it.nextSibling;
@@ -1419,8 +1424,6 @@ document.addEventListener('click', function (e) {
   if (ch && C.view) { C.view = ''; C.who = null; document.body.classList.remove('viewing'); setTimeout(function () { lcClear(); renderSide(); }, 0); }   // 查看別人時點「跟 U醬 對話」：回到自己的對話
   var ac = e.target.closest && e.target.closest('[data-v="acct"]');
   if (ac) { e.stopPropagation(); e.preventDefault(); try { closeDrawer(); } catch (x) {} viewChatOf(ac.getAttribute('data-e'), ac.getAttribute('data-n')); return; }
-  var ak = e.target.closest && e.target.closest('[data-v="aikeys"]');
-  if (ak) { e.stopPropagation(); e.preventDefault(); try { closeDrawer(); } catch (x) {} openAiKeys(); return; }
   var it = e.target.closest && e.target.closest('[data-v="users"]');
   if (!it) return;
   e.stopPropagation(); e.preventDefault();
@@ -1429,19 +1432,30 @@ document.addEventListener('click', function (e) {
 }, true);
 
 /* ----- 使用者設定（新增、啟用／關閉、角色、刪除） ----- */
-function openUsers() {
+/* ----- ⚙️ 設定（單一入口，只限管理員）：👥 使用者、🔑 AI 金鑰 ----- */
+var ST_TAB = 'users';
+function stShell(tab) {
+  ST_TAB = tab;
   q('#modal-box').className = 'wide';
-  q('#modal-title').textContent = '⚙️ 使用者設定';
-  q('#modal-body').innerHTML =
+  q('#modal-title').textContent = '⚙️ 設定';
+  q('#modal-body').innerHTML = '<div class="st-tabs"><button type="button" data-t="users" class="' + (tab === 'users' ? 'act' : '') + '">👥 使用者</button><button type="button" data-t="aikeys" class="' + (tab === 'aikeys' ? 'act' : '') + '">🔑 AI 金鑰</button></div><div id="st-body"></div>';
+  q('#modal-body').querySelectorAll('.st-tabs button').forEach(function (b) { b.addEventListener('click', function () { var t = b.getAttribute('data-t'); if (t !== ST_TAB) (t === 'users' ? openUsers : openAiKeys)(); }); });
+  q('#modal-overlay').className = 'on'; S.modalOpen = true;
+}
+function openUsers() {
+  stShell('users');
+  q('#st-body').innerHTML =
     '<div class="wu-add"><input id="wu-em" type="email" placeholder="輸入要開放的 Gmail（例：someone@gmail.com）" autocomplete="off">' +
     '<input id="wu-id" class="wu-id" placeholder="職編（必填）" autocomplete="off">' +
     '<select id="wu-ln" class="wu-ln"><option value="">LINE 帳號（讀取中…）</option></select>' +
-    '<select id="wu-rl"><option value="user">使用者（只能對話）</option><option value="admin">管理員（全部功能）</option></select>' +
+    '<select id="wu-rl"><option value="user">使用者（只能對話）</option><option value="admin">管理員（含設定、紀錄）</option></select>' +
+    '<span class="wu-doms" id="wu-ndom"></span>' +
     '<button type="button" class="wu-btn" id="wu-addbtn">＋ 新增</button></div>' +
     '<div class="wu-msg" id="wu-msg"></div><div class="wu-list" id="wu-list"><p class="desc">⏳ 讀取中…</p></div>' +
     '<div class="wu-note">・<b>使用者</b>：登入後只看得到「跟 U醬 對話」。<br>' +
-    '・<b>管理員</b>：另外可看指令紀錄、指令清單、管理使用者。<br>' +
-    '・<b>對話</b>：除了主管理員（和 LINE 同一份對話），每個人都有自己獨立的對話內容，只看得到自己的；只限帳號擁有者的功能（公文、員工查詢等）不能用。<br>' +
+    '・<b>管理員</b>：另外可看指令紀錄、指令清單，以及這個「⚙️ 設定」（使用者、AI 金鑰）。<br>' +
+    '・<b>領域權限</b>：每個人<b>有勾選的領域才能使用</b>（📋 工作報告、📝 公文幫手、👥 員工查詢），網頁和 LINE 都一樣；沒勾的領域，選單不會出現、用了也會被擋。主管理員可以使用全部領域。公文草稿會用這個人的職編建立。<br>' +
+    '・<b>對話</b>：除了主管理員（和 LINE 同一份對話），每個人都有自己獨立的對話內容，只看得到自己的。<br>' +
     '・職編：<b>必填</b>，必須是公司現有人員；之後這個人不在公司人員資料（例如離職），帳號會自動不能使用。指令紀錄裡會用姓名顯示。<br>' +
     '・LINE 帳號：從跟 U醬 說過話的 LINE 帳號裡挑選（一個 LINE 帳號只能綁一個 Gmail）。綁定後還要按「○ LINE 未開通」<b>在後台開通</b>，這個人才能在 LINE 使用 U醬（權限同「使用者」）；開通後網頁和 LINE 是同一份對話，公文等功能也會用他的職編。只加 U醬 好友、或只綁定沒開通的，LINE 都不能用。<br>' +
     '・💬 對話紀錄（只有主管理員）：以唯讀方式查看這個人跟 U醬 的對話。<br>' +
@@ -1464,6 +1478,14 @@ function lineOpts(cur, email) {
     return '<option value="' + esc(l.uid) + '"' + (l.uid === cur ? ' selected' : '') + (other ? ' disabled' : '') + '>' + esc(l.name) + (l.owner ? '（帳號擁有者）' : '') + (other ? '（已綁定 ' + esc(l.bound) + '）' : '') + '</option>';
   }).join('');
 }
+/** 領域權限勾選：u = 名單項目（null = 新增表單，預設勾工作報告）；主管理員全部、不能改 */
+function domBoxes(d, u) {
+  var ds = (d && d.domains) || [];
+  var cur = u ? (u.dom || []) : ['report'];
+  return '<span class="wu-doms"' + (u ? ' data-e="' + esc(u.e) + '"' : '') + ' title="有勾選的領域才能使用">' + ds.map(function (x) {
+    return '<label class="wu-dom' + (cur.indexOf(x.key) >= 0 ? ' on' : '') + '"><input type="checkbox" value="' + esc(x.key) + '"' + (cur.indexOf(x.key) >= 0 ? ' checked' : '') + (u && u.fixed ? ' disabled' : '') + '>' + esc((x.icon ? x.icon + ' ' : '') + x.name) + '</label>';
+  }).join('') + '</span>';
+}
 function wuMsg(t, bad) { var m = q('#wu-msg'); m.textContent = t || ''; m.style.color = bad ? '#c0392b' : '#1f8a55'; }
 function wuCall(fn, args, okText) {
   var r = gsRun().withSuccessHandler(function (d) {
@@ -1482,7 +1504,8 @@ function wuAdd() {
   if (!id) { wuMsg('⚠️ 請填這個帳號對應的公司職編（必填）', true); q('#wu-id').focus(); return; }
   q('#wu-id').value = '';
   var ln = q('#wu-ln').value;
-  wuCall('webUserSave', [{ e: e, r: q('#wu-rl').value, on: true, id: id, line: ln }], '✅ 已新增 ' + e);
+  var dom = [].map.call(document.querySelectorAll('#wu-ndom input:checked'), function (c) { return c.value; });
+  wuCall('webUserSave', [{ e: e, r: q('#wu-rl').value, on: true, id: id, line: ln, dom: dom }], '✅ 已新增 ' + e);
 }
 function wuRender(d) {
   var box = q('#wu-list');
@@ -1492,6 +1515,7 @@ function wuRender(d) {
     var lnSel = '<select class="wu-ln" data-e="' + esc(u.e) + '" title="綁定的 LINE 帳號">' + lineOpts(u.line || '', u.e) + '</select>';
     idIn += lnSel;
     if (u.line && !u.fixed) idIn += '<button type="button" class="wu-tg wu-lo ' + (u.lineOn ? 'on' : 'off') + '" data-e="' + esc(u.e) + '" data-on="' + (u.lineOn ? 1 : 0) + '" title="後台開通後，這個 LINE 帳號才能使用 U醬">' + (u.lineOn ? '💚 LINE 已開通' : '○ LINE 未開通') + '</button>';
+    idIn += domBoxes(d, u);
     var chat = (!u.fixed && ME && ME.owner) ? '<button type="button" class="wu-chat" data-e="' + esc(u.e) + '" data-n="' + esc(u.n || '') + '">💬 對話紀錄</button>' : '';
     var ctl = u.fixed ? idIn + '<span class="wu-tag">主管理員</span>' : idIn + chat +
       '<select data-e="' + esc(u.e) + '" class="wu-r"><option value="user"' + (u.r !== 'admin' ? ' selected' : '') + '>使用者</option><option value="admin"' + (u.r === 'admin' ? ' selected' : '') + '>管理員</option></select>' +
@@ -1504,6 +1528,10 @@ function wuRender(d) {
       (!u.fixed && u.id && u.valid === false ? '<span class="sub" style="color:#c0392b">⚠️ 不在公司人員資料（可能已離職），目前不能使用</span>' : '') +
       (u.t ? '<span class="sub">新增於 ' + esc(u.t) + '</span>' : '') + '</span>' + ctl + '</div>';
   }).join('') || '<p class="desc">目前沒有其他使用者</p>';
+  var nd = q('#wu-ndom'); if (nd && !nd.innerHTML) nd.innerHTML = domBoxes(d, null);
+  box.querySelectorAll('.wu-doms[data-e] input').forEach(function (c) { c.addEventListener('change', function () {
+    var w = c.closest('.wu-doms'), dom = [].map.call(w.querySelectorAll('input:checked'), function (x) { return x.value; });
+    wuCall('webUserSave', [{ e: w.getAttribute('data-e'), dom: dom }], '✅ 已更新領域權限'); }); });
   box.querySelectorAll('select.wu-ln[data-e]').forEach(function (s) { s.addEventListener('change', function () {
     wuCall('webUserSave', [{ e: s.getAttribute('data-e'), line: s.value }], s.value ? '✅ 已綁定 LINE 帳號' : '✅ 已解除 LINE 綁定'); }); });
   box.querySelectorAll('.wu-r').forEach(function (s) { s.addEventListener('change', function () {
@@ -1530,9 +1558,8 @@ function wuRender(d) {
 /* ----- 🔑 AI 金鑰（只限管理員）：各領域的金鑰清單（依序優先）、新增、測試、啟用／停用、刪除；完整金鑰不會傳回網頁 ----- */
 var AK = null;
 function openAiKeys() {
-  q('#modal-box').className = 'wide';
-  q('#modal-title').textContent = '🔑 AI 金鑰';
-  q('#modal-body').innerHTML = '<div id="ak-list"><p class="desc">⏳ 讀取四個領域的金鑰…</p></div>' +
+  stShell('aikeys');
+  q('#st-body').innerHTML = '<div id="ak-list"><p class="desc">⏳ 讀取四個領域的金鑰…</p></div>' +
     '<div class="wu-note">・每個領域用自己的金鑰，AI 用量也各自計算。清單<b>由上往下</b>依序使用：第一把失敗（額度用完、服務忙碌）就自動換下一把。<br>' +
     '・新增金鑰時建議先按「🧪 測試」確認可用，再按「💾 儲存」。金鑰只存在該領域的 GAS 指令碼屬性，網頁只顯示前後 4 碼。<br>' +
     '・「原本的設定」＝還沒在這裡改過，用的是當初設定的金鑰；第一次儲存後就改用這裡的清單。<br>' +
