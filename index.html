@@ -1332,6 +1332,29 @@ body.viewing .lc-input, body.viewing .lc-qr, body.viewing .lc-rich { display:non
 .lc-row.me .lc-name { text-align:right; }
 #who .me-av { width:28px; height:28px; } #who .me-av img { width:26px; height:26px; } #who .me-av .ini { font-size:12px; }
 .wu-note { font-size:12px; color:var(--muted); line-height:1.7; margin-top:14px; }
+.ak-dom { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
+.ak-h { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:14.5px; color:var(--navy-dark); }
+.ak-src { font-size:11px; padding:1px 8px; border-radius:10px; background:var(--accent-dim); color:var(--accent); font-weight:600; }
+.ak-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px; border:1px solid var(--border); border-left:3px solid transparent; border-radius:8px; margin-bottom:6px; transition:border-left-color .16s, background .16s; }
+.ak-row:hover { border-left-color:var(--accent); background:#EEF4FD; }
+.ak-row.off { opacity:.6; }
+.ak-ord { display:flex; flex-direction:column; gap:2px; }
+.ak-ord button { width:22px; height:15px; font-size:9px; line-height:1; border:1px solid #cdd3de; background:#fff; border-radius:4px; cursor:pointer; color:var(--muted); padding:0; }
+.ak-ord button:disabled { opacity:.3; cursor:default; }
+.ak-no { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:#C8D0DC; color:#fff; font-size:12px; font-weight:700; flex-shrink:0; }
+.ak-row:hover .ak-no { background:var(--accent); }
+.ak-p { min-width:110px; font-size:13.5px; font-weight:700; color:var(--navy-dark); }
+.ak-p .sub { display:block; font-size:11px; font-weight:400; color:var(--muted); font-family:Consolas, monospace; }
+.ak-m, .ak-n, .ak-nm, .ak-nk, .ak-nn { height:32px; border-radius:16px; border:1px solid #b0bace; padding:0 10px; font-size:12.5px; font-family:inherit; outline:none; min-width:0; transition:border-color .2s var(--ease), box-shadow .2s var(--ease); }
+.ak-m:focus, .ak-n:focus, .ak-nm:focus, .ak-nk:focus, .ak-nn:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.ak-m, .ak-nm { width:200px; } .ak-n, .ak-nn { width:140px; } .ak-nk { flex:1; min-width:180px; }
+.ak-add { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px; border:1px dashed #b0bace; border-radius:8px; margin-top:4px; }
+.ak-np { height:32px; border-radius:16px; border:1px solid #b0bace; padding:0 8px; font-size:12.5px; font-family:inherit; background:#fff; color:var(--text); }
+.ak-res { font-size:12px; flex-basis:100%; }
+.ak-res:empty { display:none; }
+.ak-foot { display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:8px; }
+.ak-msg { font-size:12.5px; color:#a08a5a; }
+.wu-btn:disabled { background:#b9c4d2; cursor:default; }
 </style>
 <script>
 /* ===== 全版網頁：登入身分與權限 ===== */
@@ -1373,6 +1396,10 @@ renderSide = function () {
     it.innerHTML = '<span class="nm">⚙️ 使用者設定</span>';
     var cat = box.querySelector('[data-v="catalog"]');
     if (cat && cat.nextSibling) box.insertBefore(it, cat.nextSibling); else box.appendChild(it);
+    var ak = document.createElement('div'); ak.className = 'cat-item'; ak.setAttribute('data-v', 'aikeys');   // 管理員：各領域的 AI 金鑰
+    ak.innerHTML = '<span class="nm">🔑 AI 金鑰</span>';
+    box.insertBefore(ak, it.nextSibling);
+    it = ak;
     if (ME.owner && ACCTS.length) {                       // 各帳號的對話紀錄
       var h = document.createElement('div'); h.className = 'cat-head'; h.textContent = '帳號對話紀錄';
       var anchor = it.nextSibling;
@@ -1392,6 +1419,8 @@ document.addEventListener('click', function (e) {
   if (ch && C.view) { C.view = ''; C.who = null; document.body.classList.remove('viewing'); setTimeout(function () { lcClear(); renderSide(); }, 0); }   // 查看別人時點「跟 U醬 對話」：回到自己的對話
   var ac = e.target.closest && e.target.closest('[data-v="acct"]');
   if (ac) { e.stopPropagation(); e.preventDefault(); try { closeDrawer(); } catch (x) {} viewChatOf(ac.getAttribute('data-e'), ac.getAttribute('data-n')); return; }
+  var ak = e.target.closest && e.target.closest('[data-v="aikeys"]');
+  if (ak) { e.stopPropagation(); e.preventDefault(); try { closeDrawer(); } catch (x) {} openAiKeys(); return; }
   var it = e.target.closest && e.target.closest('[data-v="users"]');
   if (!it) return;
   e.stopPropagation(); e.preventDefault();
@@ -1496,6 +1525,100 @@ function wuRender(d) {
     var e = b.getAttribute('data-e');
     if (!confirm('確定要刪除 ' + e + '？刪除後這個帳號就不能登入。')) return;
     wuCall('webUserDelete', [e], '✅ 已刪除 ' + e); }); });
+}
+
+/* ----- 🔑 AI 金鑰（只限管理員）：各領域的金鑰清單（依序優先）、新增、測試、啟用／停用、刪除；完整金鑰不會傳回網頁 ----- */
+var AK = null;
+function openAiKeys() {
+  q('#modal-box').className = 'wide';
+  q('#modal-title').textContent = '🔑 AI 金鑰';
+  q('#modal-body').innerHTML = '<div id="ak-list"><p class="desc">⏳ 讀取四個領域的金鑰…</p></div>' +
+    '<div class="wu-note">・每個領域用自己的金鑰，AI 用量也各自計算。清單<b>由上往下</b>依序使用：第一把失敗（額度用完、服務忙碌）就自動換下一把。<br>' +
+    '・新增金鑰時建議先按「🧪 測試」確認可用，再按「💾 儲存」。金鑰只存在該領域的 GAS 指令碼屬性，網頁只顯示前後 4 碼。<br>' +
+    '・「原本的設定」＝還沒在這裡改過，用的是當初設定的金鑰；第一次儲存後就改用這裡的清單。<br>' +
+    '・注意：Groq、Gemini 的免費額度是依「帳號／專案」合併計算，同一個帳號申請多把金鑰不會增加額度。</div>';
+  q('#modal-overlay').className = 'on'; S.modalOpen = true;
+  gsRun().withSuccessHandler(function (d) {
+    if (!d || !d.ok) { q('#ak-list').innerHTML = '<p class="desc">⚠️ ' + esc((d && d.error) || '讀取失敗') + '</p>'; return; }
+    AK = d; d.domains.forEach(function (x) { x.dirty = false; }); akRender();
+  }).withFailureHandler(function (e) { q('#ak-list').innerHTML = '<p class="desc">⚠️ ' + esc(e.message || e) + '</p>'; }).aiKeysList('');
+}
+function akDom(key) { return AK.domains.filter(function (x) { return x.key === key; })[0]; }
+function akProvOpts(d, cur) {
+  var ps = d.providers || AK.providers;
+  return Object.keys(ps).map(function (p) { return '<option value="' + p + '"' + (p === cur ? ' selected' : '') + '>' + esc(ps[p].name) + '</option>'; }).join('');
+}
+function akRender() {
+  q('#ak-list').innerHTML = AK.domains.map(function (d) {
+    var head = '<div class="ak-h"><b>' + esc(d.name) + '</b>' + (d.ok ? '<span class="ak-src">' + (d.source === 'legacy' ? '原本的設定' : '在這裡設定') + '</span>' : '') + '</div>';
+    if (!d.ok) return '<div class="ak-dom">' + head + '<p class="desc">⚠️ ' + esc(d.error || '讀取失敗') + '</p></div>';
+    var rows = d.keys.map(function (k, i) {
+      var pn = ((d.providers || AK.providers)[k.p] || {}).name || k.p;
+      return '<div class="ak-row' + (k.on ? '' : ' off') + '" data-d="' + d.key + '" data-i="' + i + '">' +
+        '<span class="ak-ord"><button type="button" class="ak-up" title="往上（優先）"' + (i ? '' : ' disabled') + '>▲</button><button type="button" class="ak-dn" title="往下"' + (i < d.keys.length - 1 ? '' : ' disabled') + '>▼</button></span>' +
+        '<span class="ak-no">' + (i + 1) + '</span>' +
+        '<span class="ak-p">' + esc(pn) + '<span class="sub">' + esc(k.k ? '（新的，尚未儲存）' : k.mask) + '</span></span>' +
+        '<input class="ak-m" value="' + esc(k.m) + '" placeholder="模型" title="模型名稱">' +
+        '<input class="ak-n" value="' + esc(k.n) + '" placeholder="備註（例：主要、備援）" title="備註">' +
+        '<button type="button" class="wu-tg ak-on ' + (k.on ? 'on' : 'off') + '">' + (k.on ? '● 啟用' : '○ 停用') + '</button>' +
+        '<button type="button" class="wu-chat ak-test">🧪 測試</button>' +
+        '<button type="button" class="wu-del ak-del" title="刪除">🗑</button>' +
+        '<span class="ak-res"></span></div>';
+    }).join('') || '<p class="desc">（沒有金鑰）</p>';
+    var add = '<div class="ak-add" data-d="' + d.key + '"><select class="ak-np">' + akProvOpts(d, 'groq') + '</select>' +
+      '<input class="ak-nm" placeholder="模型" value="' + esc(((d.providers || AK.providers).groq || {}).model || '') + '">' +
+      '<input class="ak-nk" type="password" placeholder="貼上新的 API 金鑰" autocomplete="new-password">' +
+      '<input class="ak-nn" placeholder="備註">' +
+      '<button type="button" class="wu-chat ak-ntest">🧪 測試</button><button type="button" class="wu-btn ak-nadd">＋ 加入清單</button><span class="ak-res"></span></div>';
+    var foot = '<div class="ak-foot"><span class="ak-msg" data-d="' + d.key + '">' + (d.dirty ? '有變更尚未儲存' : '') + '</span>' +
+      '<button type="button" class="wu-btn ak-save" data-d="' + d.key + '"' + (d.dirty ? '' : ' disabled') + '>💾 儲存</button></div>';
+    return '<div class="ak-dom">' + head + rows + add + foot + '</div>';
+  }).join('');
+  var L = q('#ak-list');
+  function rowOf(el) { var r = el.closest('.ak-row'); var d = akDom(r.getAttribute('data-d')); return { d: d, i: +r.getAttribute('data-i'), r: r }; }
+  function changed(d) { d.dirty = true; akRender(); }
+  L.querySelectorAll('.ak-up, .ak-dn').forEach(function (b) { b.addEventListener('click', function () {
+    var x = rowOf(b), j = x.i + (b.className === 'ak-up' ? -1 : 1), a = x.d.keys;
+    var t = a[x.i]; a[x.i] = a[j]; a[j] = t; changed(x.d); }); });
+  L.querySelectorAll('.ak-on').forEach(function (b) { b.addEventListener('click', function () { var x = rowOf(b); x.d.keys[x.i].on = !x.d.keys[x.i].on; changed(x.d); }); });
+  L.querySelectorAll('.ak-del').forEach(function (b) { b.addEventListener('click', function () {
+    var x = rowOf(b); if (!confirm('確定從清單移除這把金鑰？（按「儲存」後才會生效）')) return; x.d.keys.splice(x.i, 1); changed(x.d); }); });
+  L.querySelectorAll('.ak-m, .ak-n').forEach(function (inp) { inp.addEventListener('change', function () {
+    var x = rowOf(inp); x.d.keys[x.i][inp.className === 'ak-m' ? 'm' : 'n'] = inp.value.trim(); x.d.dirty = true;
+    var s = L.querySelector('.ak-save[data-d="' + x.d.key + '"]'); s.disabled = false; L.querySelector('.ak-msg[data-d="' + x.d.key + '"]').textContent = '有變更尚未儲存'; }); });
+  L.querySelectorAll('.ak-test').forEach(function (b) { b.addEventListener('click', function () {
+    var x = rowOf(b), k = x.d.keys[x.i];
+    akTest(x.d.key, k.k ? null : k.id, k.k ? { p: k.p, m: k.m, k: k.k } : null, x.r.querySelector('.ak-res')); }); });
+  L.querySelectorAll('.ak-add').forEach(function (f) {
+    var d = akDom(f.getAttribute('data-d'));
+    f.querySelector('.ak-np').addEventListener('change', function () { f.querySelector('.ak-nm').value = ((d.providers || AK.providers)[this.value] || {}).model || ''; });
+    function entry() { return { p: f.querySelector('.ak-np').value, m: f.querySelector('.ak-nm').value.trim(), k: f.querySelector('.ak-nk').value.trim(), n: f.querySelector('.ak-nn').value.trim() }; }
+    f.querySelector('.ak-ntest').addEventListener('click', function () {
+      var e = entry(); if (!e.k) { f.querySelector('.ak-res').textContent = '⚠️ 先貼上金鑰'; return; }
+      akTest(d.key, null, e, f.querySelector('.ak-res')); });
+    f.querySelector('.ak-nadd').addEventListener('click', function () {
+      var e = entry();
+      if (!e.k) { f.querySelector('.ak-res').textContent = '⚠️ 先貼上金鑰'; return; }
+      if (!e.m) { f.querySelector('.ak-res').textContent = '⚠️ 要填模型'; return; }
+      d.keys.push({ id: '', p: e.p, m: e.m, n: e.n, on: true, k: e.k }); changed(d); });
+  });
+  L.querySelectorAll('.ak-save').forEach(function (b) { b.addEventListener('click', function () {
+    var d = akDom(b.getAttribute('data-d')), msg = L.querySelector('.ak-msg[data-d="' + d.key + '"]');
+    b.disabled = true; msg.textContent = '⏳ 儲存中…';
+    var keys = d.keys.map(function (k) { var o = { id: k.id, p: k.p, m: k.m, n: k.n, on: k.on }; if (k.k) o.k = k.k; return o; });
+    gsRun().withSuccessHandler(function (r) {
+      if (!r || !r.ok) { b.disabled = false; msg.textContent = '⚠️ ' + ((r && r.error) || '儲存失敗'); msg.style.color = '#c0392b'; return; }
+      d.keys = r.keys; d.source = r.source; d.dirty = false; akRender();
+      var m2 = L.querySelector('.ak-msg[data-d="' + d.key + '"]'); m2.textContent = '✅ 已儲存，立刻生效'; m2.style.color = '#1f8a55';
+    }).withFailureHandler(function (e) { b.disabled = false; msg.textContent = '⚠️ ' + (e.message || e); msg.style.color = '#c0392b'; }).aiKeysSave('', d.key, keys);
+  }); });
+}
+function akTest(domain, id, entry, el) {
+  el.textContent = '⏳ 測試中…'; el.style.color = '';
+  gsRun().withSuccessHandler(function (r) {
+    if (r && r.ok) { el.textContent = '✅ 可用（' + (r.ms / 1000).toFixed(1) + ' 秒）'; el.style.color = '#1f8a55'; }
+    else { el.textContent = '❌ ' + ((r && r.error) || '失敗').substring(0, 120); el.style.color = '#c0392b'; el.title = (r && r.error) || ''; }
+  }).withFailureHandler(function (e) { el.textContent = '❌ ' + (e.message || e); el.style.color = '#c0392b'; }).aiKeysTest('', domain, id, entry);
 }
 
 /* ----- 對話框：自己（或正在查看的人）的大頭照與姓名 ----- */
